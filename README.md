@@ -10,8 +10,8 @@ For a simple mail relay configuration, see [Make a MacOS send mail over relay vi
 
 ## Running it
 
-e.g. by crontab (edit via `crontab -e`), runs every 12 hours:
+e.g. by crontab (edit via `crontab -e`), every 12 hours:
 ```
-    0 */12 * * * /path/to/bin/upgrade-macports
+    0 */12 * * * /path/to/bin/update-macports
 ```
 
