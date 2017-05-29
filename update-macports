@@ -1,0 +1,72 @@
+#!/bin/bash
+# 2017 Thomas Karmann <thomas@krmnn.de>
+#
+# This script will update MacPorts and its installed ports
+# and write a log to the given destination and/or mail it to you.
+
+# target destination of the logfiles
+LOG_DESTINATION="~/Logs/MacPorts"
+
+# mail receipient, leave empty for no mails
+EMAIL="foo@noroute.xxx"
+
+# options
+PORT_EXEC="/opt/local/bin/port"
+DAY=$(date +"%Y/%m/%d")
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+# logging
+LOG_FILE="${LOG_DESTINATION}/upgrade_${TIMESTAMP}.txt"
+mkdir -p "${LOG_DESTINATION}" 2>/dev/null && touch "${LOG_FILE}" 2>/dev/null
+chmod 644 ${LOG_FILE} # fix permissions
+
+log () {
+    if [[ -n $1 ]]; then
+	echo "$@" >> $LOG_FILE; echo >> $LOG_FILE # write to log
+	echo "$@"; echo 			# write to stdout
+    else
+	while read x; do
+	    printf ">  $x\n" >> ${LOG_FILE} 	# write to log
+	    printf ">  $x\n" 			# write to stdout
+	done
+	printf "\n" >> ${LOG_FILE}; printf "\n"	# newline
+    fi;
+}
+
+# first, update macports itself
+log "Self-update MacPorts:"
+$PORT_EXEC selfupdate | log; wait
+
+# upgrade outdated ports, if any
+if [ $($PORT_EXEC list outdated | wc -l) -gt 0 ]; then 
+    log "Outdated ports:"
+    $PORT_EXEC list outdated | log; wait
+
+    log "Upgrade installed ports:"
+    # -u: uninstall inactive ports when upgrading
+    # -c: autoclean after install
+    nice $PORT_EXEC -uc upgrade outdated | log; wait
+    PORT_UPGRADE_SUCCESS=$?
+
+    # remove inactive (= old) ports
+    nice $PORT_EXEC uninstall inactive | log; wait
+else 
+    log 'The installed ports are up to date.'
+fi
+
+# send mail
+if [ -n ${EMAIL} ]; then
+    # check if port upgrade did actually run
+    if [ -z ${PORT_UPGRADE_SUCCESS+x} ]; then
+	SUBJECT="[${HOSTNAME}] Update MacPorts on ${DAY}: Already up to date."
+    else
+	if [ ${PORT_UPGRADE_SUCCESS} -eq 0 ]; then
+	    SUBJECT="[${HOSTNAME}] Update MacPorts on ${DAY}: Success."
+	else
+	    SUBJECT="[${HOSTNAME}] Update MacPorts on ${DAY}: Failure."
+	fi
+    fi
+    # send through local 'mail(1)'
+    mail -s "${SUBJECT}" "${EMAIL}" < ${LOG_FILE}
+fi
+
